@@ -2,20 +2,15 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { user } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 export async function GET() {
   try {
-    // Check if admin already exists
-    const existing = await db.select().from(user);
-    
-    if (existing.length > 0) {
-      return NextResponse.json({
-        message: "Users already exist in DB",
-        users: existing.map(u => ({ id: u.id, name: u.name, email: u.email, username: u.username }))
-      });
-    }
+    // 1. Force delete the existing admin to reset the password hash
+    // This ensures the password moves to the correct table/column
+    await db.delete(user).where(eq(user.email, "admin@burzt.com"));
 
-    // Create admin
+    // 2. Create the fresh admin account
     await auth.api.signUpEmail({
       body: {
         name: "Admin",
@@ -27,9 +22,17 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      credentials: { username: "admin", password: "Admin@Burzt2024" },
+      message: "Admin account RE-CREATED successfully!",
+      credentials: { 
+        email: "admin@burzt.com", 
+        password: "Admin@Burzt2024" 
+      },
     });
-  } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+  } catch (error: any) {
+    return NextResponse.json({
+      success: false,
+      message: "Seed failed",
+      error: error.message
+    }, { status: 500 });
   }
 }
